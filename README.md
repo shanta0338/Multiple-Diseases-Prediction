@@ -1,4 +1,4 @@
-# Multiple Disease Prediction
+# Multiple Diseases Prediction
 
 A machine learning project that classifies diseases based on blood sample parameters using ensemble methods and hyperparameter optimization.
 
