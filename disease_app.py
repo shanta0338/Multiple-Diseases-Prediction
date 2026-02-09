@@ -119,15 +119,6 @@ def normalize_input(values: dict) -> np.ndarray:
     return np.array([row])
 
 
-def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize a whole DataFrame of raw values to [0, 1]."""
-    normed = df[FEATURE_NAMES].copy()
-    for feat in FEATURE_NAMES:
-        lo, hi = _saved_ranges[feat]
-        normed[feat] = (normed[feat] - lo) / (hi - lo)
-    return normed
-
-
 # ── UI ───────────────────────────────────────────────────────────────────────
 st.title("🩸 Blood Sample Disease Detection")
 st.markdown(
@@ -135,62 +126,21 @@ st.markdown(
     "The model was trained on a blood samples dataset using a Stacking Classifier pipeline."
 )
 
-# ── Sidebar – Input Mode ─────────────────────────────────────────────────────
-st.sidebar.header("⚙️ Input Mode")
-input_mode = st.sidebar.radio("Choose input method:", ["Sliders", "Manual Entry", "CSV Upload"])
+# ── Input ─────────────────────────────────────────────────────────────────────
+st.subheader("✏️ Enter Blood Parameters")
+col1, col2, col3 = st.columns(3)
+columns = [col1, col2, col3]
 
 features = {}
-
-if input_mode == "Sliders":
-    st.subheader("📊 Adjust Blood Parameters")
-    col1, col2, col3 = st.columns(3)
-    columns = [col1, col2, col3]
-
-    for i, feat in enumerate(FEATURE_NAMES):
-        lo, hi, default = FEATURE_RANGES[feat]
-        with columns[i % 3]:
-            features[feat] = st.slider(feat, min_value=lo, max_value=hi, value=default, step=(hi - lo) / 200)
-
-elif input_mode == "Manual Entry":
-    st.subheader("✏️ Enter Blood Parameters")
-    col1, col2, col3 = st.columns(3)
-    columns = [col1, col2, col3]
-
-    for i, feat in enumerate(FEATURE_NAMES):
-        _, _, default = FEATURE_RANGES[feat]
-        with columns[i % 3]:
-            features[feat] = st.number_input(feat, value=default, format="%.4f")
-
-elif input_mode == "CSV Upload":
-    st.subheader("📁 Upload a CSV File")
-    st.markdown(f"The CSV must have these columns: `{', '.join(FEATURE_NAMES)}`")
-    uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
-
-    if uploaded_file is not None:
-        try:
-            upload_df = pd.read_csv(uploaded_file)
-            missing = [c for c in FEATURE_NAMES if c not in upload_df.columns]
-            if missing:
-                st.error(f"Missing columns: {missing}")
-            else:
-                st.dataframe(upload_df[FEATURE_NAMES].head(20), use_container_width=True)
-                if st.button("🔍 Predict All Rows"):
-                    X_upload = normalize_dataframe(upload_df).values
-                    preds = model.predict(X_upload)
-                    upload_df["Predicted Disease"] = label_encoder.inverse_transform(preds)
-                    st.success("Predictions complete!")
-                    st.dataframe(upload_df, use_container_width=True)
-
-                    csv = upload_df.to_csv(index=False).encode("utf-8")
-                    st.download_button("📥 Download Results", csv, "predictions.csv", "text/csv")
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
+for i, feat in enumerate(FEATURE_NAMES):
+    _, _, default = FEATURE_RANGES[feat]
+    with columns[i % 3]:
+        features[feat] = st.number_input(feat, value=default, format="%.4f")
 
 
-# ── Single Prediction ────────────────────────────────────────────────────────
-if input_mode in ["Sliders", "Manual Entry"]:
-    st.divider()
-    if st.button("🔍 Predict Disease", type="primary", use_container_width=True):
+# ── Prediction ────────────────────────────────────────────────────────────────
+st.divider()
+if st.button("🔍 Predict Disease", type="primary", use_container_width=True):
         input_array = normalize_input(features)
         prediction = model.predict(input_array)[0]
         disease = label_encoder.inverse_transform([prediction])[0]
