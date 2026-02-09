@@ -51,3 +51,5 @@ The project employs two optimization strategies:
   - Gradient Boosting learning rate: 0.1
   - Random Forest: 50 estimators, log2 max features, depth 20
   - Logistic Regression: C=2.0, L2 regularization
+## Live Link
+https://multiple-diseases-prediction-5uxofpwyxy5wjesufqexbi.streamlit.app/
