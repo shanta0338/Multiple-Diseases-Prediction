@@ -91,6 +91,29 @@ DISEASE_DESCRIPTIONS = {
 }
 
 
+def normalize_input(values: dict) -> np.ndarray:
+    """Normalize raw feature values to [0, 1] using FEATURE_RANGES.
+
+    The training data was min-max scaled to [0, 1], so we must apply
+    the same transformation before feeding values into the model.
+    """
+    row = []
+    for feat in FEATURE_NAMES:
+        lo, hi, _ = FEATURE_RANGES[feat]
+        raw = values[feat]
+        row.append((raw - lo) / (hi - lo))
+    return np.array([row])
+
+
+def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize a whole DataFrame of raw values to [0, 1]."""
+    normed = df[FEATURE_NAMES].copy()
+    for feat in FEATURE_NAMES:
+        lo, hi, _ = FEATURE_RANGES[feat]
+        normed[feat] = (normed[feat] - lo) / (hi - lo)
+    return normed
+
+
 @st.cache_resource
 def load_model():
     """Load the trained model from disk."""
@@ -151,7 +174,7 @@ elif input_mode == "CSV Upload":
             else:
                 st.dataframe(upload_df[FEATURE_NAMES].head(20), use_container_width=True)
                 if st.button("🔍 Predict All Rows"):
-                    X_upload = upload_df[FEATURE_NAMES].values
+                    X_upload = normalize_dataframe(upload_df).values
                     preds = model.predict(X_upload)
                     upload_df["Predicted Disease"] = [DISEASE_LABELS.get(p, "Unknown") for p in preds]
                     st.success("Predictions complete!")
@@ -167,7 +190,7 @@ elif input_mode == "CSV Upload":
 if input_mode in ["Sliders", "Manual Entry"]:
     st.divider()
     if st.button("🔍 Predict Disease", type="primary", use_container_width=True):
-        input_array = np.array([[features[f] for f in FEATURE_NAMES]])
+        input_array = normalize_input(features)
         prediction = model.predict(input_array)[0]
         disease = DISEASE_LABELS.get(prediction, "Unknown")
         color = DISEASE_COLORS.get(disease, "#555")
