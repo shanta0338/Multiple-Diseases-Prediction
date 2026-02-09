@@ -6,71 +6,90 @@ import pandas as pd
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Disease Detection", page_icon="🩸", layout="wide")
 
-# ── Load Model ───────────────────────────────────────────────────────────────
+# ── Load Model Bundle ────────────────────────────────────────────────────────
 MODEL_PATH = "blood_model.pkl"
-DISEASE_LABELS = {
-    0: "Anemia",
-    1: "Diabetes",
-    2: "Healthy",
-    3: "Heart Disease",
-    4: "Thalassemia",
-    5: "Thrombocytosis",
+
+
+@st.cache_resource
+def load_bundle():
+    """Load the model bundle (model + label_encoder + feature_ranges) from disk.
+
+    Supports two formats:
+    - New bundle dict with keys: model, label_encoder, feature_names, feature_ranges
+    - Legacy: raw sklearn model (RandomizedSearchCV / Pipeline)
+    """
+    try:
+        obj = joblib.load(MODEL_PATH)
+    except FileNotFoundError:
+        st.error(f"Model file **{MODEL_PATH}** not found. Make sure it is in the same directory as this app.")
+        st.stop()
+
+    if isinstance(obj, dict) and "model" in obj:
+        return obj  # new bundle format
+
+    # Legacy format – wrap into a bundle so the rest of the app stays uniform
+    from sklearn.preprocessing import LabelEncoder
+    le = LabelEncoder()
+    le.classes_ = np.array(["Anemia", "Diabetes", "Healthy",
+                            "Heart Disease", "Thalassemia", "Thrombocytosis"])
+    return {
+        "model": obj,
+        "label_encoder": le,
+        "feature_names": [
+            "Glucose", "Cholesterol", "Hemoglobin", "Platelets",
+            "White Blood Cells", "Red Blood Cells", "Hematocrit",
+            "Mean Corpuscular Volume", "Mean Corpuscular Hemoglobin",
+            "Mean Corpuscular Hemoglobin Concentration", "Insulin", "BMI",
+            "Systolic Blood Pressure", "Diastolic Blood Pressure",
+            "Triglycerides", "HbA1c", "LDL Cholesterol", "HDL Cholesterol",
+            "ALT", "AST", "Heart Rate", "Creatinine", "Troponin",
+            "C-reactive Protein",
+        ],
+        "feature_ranges": {
+            "Glucose": (50.0, 300.0), "Cholesterol": (100.0, 400.0),
+            "Hemoglobin": (5.0, 20.0), "Platelets": (50000.0, 500000.0),
+            "White Blood Cells": (2000.0, 20000.0), "Red Blood Cells": (2.0, 8.0),
+            "Hematocrit": (20.0, 60.0), "Mean Corpuscular Volume": (60.0, 110.0),
+            "Mean Corpuscular Hemoglobin": (20.0, 40.0),
+            "Mean Corpuscular Hemoglobin Concentration": (28.0, 38.0),
+            "Insulin": (2.0, 300.0), "BMI": (10.0, 50.0),
+            "Systolic Blood Pressure": (80.0, 200.0),
+            "Diastolic Blood Pressure": (40.0, 130.0),
+            "Triglycerides": (30.0, 500.0), "HbA1c": (3.0, 15.0),
+            "LDL Cholesterol": (30.0, 250.0), "HDL Cholesterol": (15.0, 100.0),
+            "ALT": (5.0, 200.0), "AST": (5.0, 200.0),
+            "Heart Rate": (40.0, 150.0), "Creatinine": (0.3, 5.0),
+            "Troponin": (0.0, 2.0), "C-reactive Protein": (0.0, 50.0),
+        },
+    }
+
+
+bundle = load_bundle()
+model = bundle["model"]
+label_encoder = bundle["label_encoder"]
+FEATURE_NAMES = bundle["feature_names"]
+
+# feature_ranges from bundle are (min, max); add sensible defaults for sliders
+_saved_ranges = bundle["feature_ranges"]
+_DEFAULTS = {
+    "Glucose": 100.0, "Cholesterol": 200.0, "Hemoglobin": 14.0,
+    "Platelets": 250000.0, "White Blood Cells": 7000.0, "Red Blood Cells": 5.0,
+    "Hematocrit": 42.0, "Mean Corpuscular Volume": 85.0,
+    "Mean Corpuscular Hemoglobin": 29.0,
+    "Mean Corpuscular Hemoglobin Concentration": 33.0,
+    "Insulin": 15.0, "BMI": 25.0, "Systolic Blood Pressure": 120.0,
+    "Diastolic Blood Pressure": 80.0, "Triglycerides": 150.0, "HbA1c": 5.5,
+    "LDL Cholesterol": 100.0, "HDL Cholesterol": 55.0, "ALT": 30.0,
+    "AST": 30.0, "Heart Rate": 75.0, "Creatinine": 1.0, "Troponin": 0.02,
+    "C-reactive Protein": 3.0,
 }
-
-FEATURE_NAMES = [
-    "Glucose",
-    "Cholesterol",
-    "Hemoglobin",
-    "Platelets",
-    "White Blood Cells",
-    "Red Blood Cells",
-    "Hematocrit",
-    "Mean Corpuscular Volume",
-    "Mean Corpuscular Hemoglobin",
-    "Mean Corpuscular Hemoglobin Concentration",
-    "Insulin",
-    "BMI",
-    "Systolic Blood Pressure",
-    "Diastolic Blood Pressure",
-    "Triglycerides",
-    "HbA1c",
-    "LDL Cholesterol",
-    "HDL Cholesterol",
-    "ALT",
-    "AST",
-    "Heart Rate",
-    "Creatinine",
-    "Troponin",
-    "C-reactive Protein",
-]
-
-# Typical real-world ranges for display (used as slider defaults)
 FEATURE_RANGES = {
-    "Glucose":          (50.0, 300.0, 100.0),
-    "Cholesterol":      (100.0, 400.0, 200.0),
-    "Hemoglobin":       (5.0, 20.0, 14.0),
-    "Platelets":        (50000.0, 500000.0, 250000.0),
-    "White Blood Cells": (2000.0, 20000.0, 7000.0),
-    "Red Blood Cells":  (2.0, 8.0, 5.0),
-    "Hematocrit":       (20.0, 60.0, 42.0),
-    "Mean Corpuscular Volume": (60.0, 110.0, 85.0),
-    "Mean Corpuscular Hemoglobin": (20.0, 40.0, 29.0),
-    "Mean Corpuscular Hemoglobin Concentration": (28.0, 38.0, 33.0),
-    "Insulin":          (2.0, 300.0, 15.0),
-    "BMI":              (10.0, 50.0, 25.0),
-    "Systolic Blood Pressure": (80.0, 200.0, 120.0),
-    "Diastolic Blood Pressure": (40.0, 130.0, 80.0),
-    "Triglycerides":    (30.0, 500.0, 150.0),
-    "HbA1c":            (3.0, 15.0, 5.5),
-    "LDL Cholesterol":  (30.0, 250.0, 100.0),
-    "HDL Cholesterol":  (15.0, 100.0, 55.0),
-    "ALT":              (5.0, 200.0, 30.0),
-    "AST":              (5.0, 200.0, 30.0),
-    "Heart Rate":       (40.0, 150.0, 75.0),
-    "Creatinine":       (0.3, 5.0, 1.0),
-    "Troponin":         (0.0, 2.0, 0.02),
-    "C-reactive Protein": (0.0, 50.0, 3.0),
+    feat: (lo, hi, _DEFAULTS.get(feat, (lo + hi) / 2))
+    for feat, (lo, hi) in _saved_ranges.items()
 }
+
+# Build disease label mapping from saved LabelEncoder
+DISEASE_LABELS = {i: name for i, name in enumerate(label_encoder.classes_)}
 
 DISEASE_COLORS = {
     "Anemia": "#e74c3c",
@@ -92,16 +111,11 @@ DISEASE_DESCRIPTIONS = {
 
 
 def normalize_input(values: dict) -> np.ndarray:
-    """Normalize raw feature values to [0, 1] using FEATURE_RANGES.
-
-    The training data was min-max scaled to [0, 1], so we must apply
-    the same transformation before feeding values into the model.
-    """
+    """Normalize raw feature values to [0, 1] using saved feature_ranges."""
     row = []
     for feat in FEATURE_NAMES:
-        lo, hi, _ = FEATURE_RANGES[feat]
-        raw = values[feat]
-        row.append((raw - lo) / (hi - lo))
+        lo, hi = _saved_ranges[feat]
+        row.append((values[feat] - lo) / (hi - lo))
     return np.array([row])
 
 
@@ -109,20 +123,9 @@ def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize a whole DataFrame of raw values to [0, 1]."""
     normed = df[FEATURE_NAMES].copy()
     for feat in FEATURE_NAMES:
-        lo, hi, _ = FEATURE_RANGES[feat]
+        lo, hi = _saved_ranges[feat]
         normed[feat] = (normed[feat] - lo) / (hi - lo)
     return normed
-
-
-@st.cache_resource
-def load_model():
-    """Load the trained model from disk."""
-    try:
-        model = joblib.load(MODEL_PATH)
-        return model
-    except FileNotFoundError:
-        st.error(f"Model file **{MODEL_PATH}** not found. Make sure the model is in the same directory as this app.")
-        st.stop()
 
 
 # ── UI ───────────────────────────────────────────────────────────────────────
@@ -131,8 +134,6 @@ st.markdown(
     "Enter your blood test values below and click **Predict** to detect potential diseases. "
     "The model was trained on a blood samples dataset using a Stacking Classifier pipeline."
 )
-
-model = load_model()
 
 # ── Sidebar – Input Mode ─────────────────────────────────────────────────────
 st.sidebar.header("⚙️ Input Mode")
@@ -176,7 +177,7 @@ elif input_mode == "CSV Upload":
                 if st.button("🔍 Predict All Rows"):
                     X_upload = normalize_dataframe(upload_df).values
                     preds = model.predict(X_upload)
-                    upload_df["Predicted Disease"] = [DISEASE_LABELS.get(p, "Unknown") for p in preds]
+                    upload_df["Predicted Disease"] = label_encoder.inverse_transform(preds)
                     st.success("Predictions complete!")
                     st.dataframe(upload_df, use_container_width=True)
 
@@ -192,7 +193,7 @@ if input_mode in ["Sliders", "Manual Entry"]:
     if st.button("🔍 Predict Disease", type="primary", use_container_width=True):
         input_array = normalize_input(features)
         prediction = model.predict(input_array)[0]
-        disease = DISEASE_LABELS.get(prediction, "Unknown")
+        disease = label_encoder.inverse_transform([prediction])[0]
         color = DISEASE_COLORS.get(disease, "#555")
 
         st.divider()
