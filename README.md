@@ -2,7 +2,8 @@
 
 A machine learning app that predicts disease risk (Anemia, Diabetes, Healthy, Heart Disease, Thalassemia, Thrombocytopenia) from 24 blood test parameters, deployed with Streamlit.
 
-**Live app:** https://multiple-diseases-prediction-5uxofpwyxy5wjesufqexbi.streamlit.app/
+## Live Link
+[![Live App](https://img.shields.io/badge/Live%20App-Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://multiple-diseases-prediction-5uxofpwyxy5wjesufqexbi.streamlit.app/)
 
 ## Overview
 
